@@ -1,16 +1,16 @@
 program ptca_repulsive
+
+
+!!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
+implicit none
 include "mpif.h"
-
-
- !!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
- !implicit none
 
   integer :: i,j,ki
   integer :: my_id
   integer :: num_procs
   integer(8) :: site_clster
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 6 !! system size
+  integer(8),parameter :: L = 12 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  4 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
@@ -32,6 +32,9 @@ include "mpif.h"
 
   real(8),parameter :: m_max=2.0_8,m_min=0.0_8
 
+  !!! this array will be initialized to -1 at the starting 
+  !!! entry will be changed to 1 when that particular site is updated during mc
+  integer(8),dimension(0:split_sites-1)::chaged_vars
   !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
   integer(8),dimension(0:n_sites-1)::sites
   integer(8),dimension(0:n_sites-1):: right,left,up,down
@@ -83,7 +86,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h)
     
-    
+
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
     
@@ -103,14 +106,22 @@ integer, dimension(MPI_STATUS_SIZE)::status
        ! print *,'Equlibration loop with temp',tvar
        !! loop over all the splits  
         do j=0,n_splits-1,1
-       
+          
+          !! intializing changed vars to -1 and sending it to all the processes
+          if (my_id==0) then
+            do loc_proc=0,split_sites-1,1
+                changed_vars[loc_proc]=-1
+            enddo
+          end if
+          call MPI_BCAST()
+          
           !! loop over all the sites within the partition
          do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
  !          do ki=0,split_sites-1,1
           !  do ki=0,n_sites-1,1
             site_clster = sites_array(j,ki)
             call random_number(rnum)
-            print *,my_id,j,site_clster,rnum
+            !print *,my_id,j,site_clster!,rnum
             !site_clster = ki
             !!    initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
@@ -120,6 +131,30 @@ integer, dimension(MPI_STATUS_SIZE)::status
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
           end do
+            
+          !!! transfer the new m,theta,phi,hamiltonian between all the processors
+          if (my_id==0) then
+            print *,'I am master',my_id
+            do loc_proc=1,num_procs-1,1
+              call MPI_RECV()
+            end do
+          end if 
+          if (my_id > 0) then
+            print *,'I am slave', my_id
+            CALL MPI_SEND()
+          end if            
+
+
+
+
+
+
+
+
+
+
+
+
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         end do
@@ -140,7 +175,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
             site_clster = sites_array(j,ki)
 !            site_clster=ki
             call random_number(rnum)
-            print *,my_id,j,site_clster,rnum
+            !print *,my_id,j,site_clster!,rnum
             !!    initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
                                 hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
@@ -149,6 +184,20 @@ integer, dimension(MPI_STATUS_SIZE)::status
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
             end do
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         end do  
@@ -158,7 +207,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         if ( mod(i,meas_skip)==0 ) then
           
           call print_f(fname,u_int,tvar,L,cls_sites)
-          print *,i,tvar,fname
+          !print *,i,tvar,fname
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
             write(16,20) i,j,m(j),theta(j),phi(j)
@@ -167,7 +216,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
           close(16)
         end if
       end do
-      print *,tvar,"finished"
+      !print *,tvar,"finished"
       !!! lower the temperature of the system
       tvar = tvar-dtemp
     end do
