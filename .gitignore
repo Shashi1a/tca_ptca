@@ -1,0 +1,11 @@
+# ignore .dat files
+*.dat
+
+# ignore data files
+configur*
+
+# ignore zip files
+*.zip
+
+#ignore data folders
+U*
