@@ -286,20 +286,22 @@ integer, dimension(MPI_STATUS_SIZE)::status
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         !! printing the results in an output file after every meas_skip mc cycles
+        if (my_id==0) then 
         if ( mod(i,meas_skip)==0 ) then
           
           call print_f(fname,u_int,tvar,L,cls_sites)
           !print *,i,tvar,fname
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
             write(16,20) i,j,m(j),theta(j),phi(j)
             20  format(I4,2X,I4,2X,ES22.8,2X,ES22.8,2X,ES22.8)
           end do
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           close(16)
         end if
-        
+      end if 
+      call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
       !!! end of the measurement loop
       end do
       !print *,tvar,"finished"
