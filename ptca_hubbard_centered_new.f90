@@ -140,19 +140,19 @@ integer, dimension(MPI_STATUS_SIZE)::status
           end do
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           !print *, changed_ids  
-          do loc_proc=0,split_sites-1,1
-            if (changed_ids(loc_proc)>=0) then
+          !do loc_proc=0,split_sites-1,1
+           ! if (changed_ids(loc_proc)>=0) then
               !print *,changed_ids(loc_proc),my_id,j
-            endif
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          enddo
+           ! endif
+          !call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          !enddo
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
-            do ki=0,split_sites-1,1
-              if (changed_ids(ki)>=0) then
-                print *,changed_ids(ki),ki,my_id
-              endif
-              enddo
+            !do ki=0,split_sites-1,1
+            !  if (changed_ids(ki)>=0) then
+            !    print *,changed_ids(ki),ki,my_id
+            !  endif
+            !  enddo
             do loc_proc=1,num_procs-1,1
               call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
@@ -244,7 +244,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
               if (changed_ids(ki)>=0) then
-                print *,changed_ids(ki),ki,loc_proc
+                !print *,changed_ids(ki),ki,loc_proc
                 m(changed_ids(ki)) = loc_m(changed_ids(ki))
                 theta(changed_ids(ki)) = loc_theta(changed_ids(ki))
                 phi(changed_ids(ki)) = loc_phi(changed_ids(ki))
@@ -290,7 +290,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         if ( mod(i,meas_skip)==0 ) then
           
           call print_f(fname,u_int,tvar,L,cls_sites)
-          !print *,i,tvar,fname
+          print *,i,tvar,fname
 
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
