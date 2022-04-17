@@ -1,11 +1,11 @@
 program ptca_repulsive
+
 include "mpif.h"
 
-
 !!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
-!implicit none
 
-  integer :: i,j,ki
+!  implicit none
+  integer(8) :: i,j,ki
   integer :: my_id
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
@@ -75,8 +75,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
    
    call MPI_INIT(ierr)
-   call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
    call MPI_COMM_SIZE(MPI_COMM_WORLD,num_procs,ierr)
+   call MPI_COMM_RANK(MPI_COMM_WORLD,my_id,ierr)
 
     !! calling the subroutine to initialize the neighbours
     call neighbour_table(right,left,up,down,L,n_sites,sites)
@@ -119,7 +119,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          !print *,changed_ids,my_id
+          print *,my_id
           
           !! loop over all the sites within the partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
@@ -154,11 +154,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !  endif
             !  enddo
             do loc_proc=1,num_procs-1,1
-              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,18,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,12,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,15,MPI_COMM_WORLD,status,ierr)
               
               do ki=0,split_sites-1,1
               if (changed_ids(ki)>=0) then
@@ -173,11 +173,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
             end do
           end if 
           if (my_id > 0) then
-              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,18,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,15,MPI_COMM_WORLD,status,ierr)
             end if            
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
@@ -235,16 +235,16 @@ integer, dimension(MPI_STATUS_SIZE)::status
           if (my_id==0) then
             !!! loop over all the processors and recieve the data from each one of them
             do loc_proc=1,num_procs-1,1
-              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,18,MPI_COMM_WORLD,status,ierr)
-              call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,18,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,28,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,38,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,48,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,58,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,68,MPI_COMM_WORLD,status,ierr)
               
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
               if (changed_ids(ki)>=0) then
-                !print *,changed_ids(ki),ki,loc_proc
+                print *,changed_ids(ki),ki,loc_proc
                 m(changed_ids(ki)) = loc_m(changed_ids(ki))
                 theta(changed_ids(ki)) = loc_theta(changed_ids(ki))
                 phi(changed_ids(ki)) = loc_phi(changed_ids(ki))
@@ -257,11 +257,18 @@ integer, dimension(MPI_STATUS_SIZE)::status
           
           !!! send the information about the site that is changed and the observables that are changed to the master
           if (my_id > 0) then
-              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,18,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,18,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,status,ierr)
+
+              
+              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,status,ierr)
+
+
+              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,status,ierr)
+
+
+              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,status,ierr)
+
+              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,68,MPI_COMM_WORLD,status,ierr)
             end if         
           
           !!! synchronize all the processes 
@@ -269,15 +276,19 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
           !!! send the updated m configurations
           call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !!! send the updated theta configurations
           call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !!! send the updated phi configurations
           call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !!! send the updated hamiltonian
           call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+
           
           !!! synchronize all the processes 
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -290,7 +301,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         if ( mod(i,meas_skip)==0 ) then
           
           call print_f(fname,u_int,tvar,L,cls_sites)
-          print *,i,tvar,fname
+          !print *,i,tvar,fname
 
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
@@ -450,7 +461,7 @@ subroutine cluster_ham(site_clster,L,n_sites,cls_sites, hamil_cls,cls_dim,&
                         t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
 implicit none
   integer(8) :: cls_dim,L, cls_sites,n_sites
-  integer :: i,si,x,y,xip,yip
+  integer(8) :: i,si,x,y,xip,yip
   integer :: sri,sui ! for the nn hopping
   integer(8) :: site_clster ! site that has the variable that will be changed
   integer(8) :: dim_h,dim_clsh
@@ -520,7 +531,7 @@ end subroutine cluster_ham
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
 implicit none
-    integer :: i,j,sil
+    integer(8) :: i,j,sil
     integer(8) :: xi,yi,xn,yn,n_sites,cls_dim
     integer(8) :: L,cls_sites
     integer(8) :: x_init,y_init
