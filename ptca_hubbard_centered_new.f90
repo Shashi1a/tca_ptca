@@ -17,7 +17,7 @@ include "mpif.h"
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
   integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 1000 !! no of measurements
+  integer(8),parameter :: n_meas  = 2000 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 2*cls_dim ! dimensionality of cluster hamiltonian
@@ -80,9 +80,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !! calling the subroutine to initialize the neighbours
     call neighbour_table(right,left,up,down,L,n_sites,sites)
 
-    !! subroutined to initialize the mc variables(m,theta,phi) at each site
+    !! subroutinee to initialize the mc variables(m,theta,phi) at each site
     if (my_id == 0) then
-    call mcvar_init(n_sites,m,theta,phi,pi,m_min,m_max)
+        call mcvar_init(n_sites,m,theta,phi,pi,m_min,m_max)
     end if
     
     !! synchronize all the processes and broadcast m configuration
@@ -99,14 +99,12 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
 
     !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by master
-    if (my_id==0) then
+    
     call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h)
-    end if
 
-    !! synchronize all the processes and broadcast the initial hamiltonian
+    !! wait for all the process to finish this
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-    call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
@@ -126,7 +124,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     do i = 0, n_equil, 1
 !        print *,'Equlibration loop with temp',tvar
        !! loop over all the splits  
-        do j=0,1,1
+        do j=0,n_splits-1,1
 
           !! intializing changed vars to -1 and broadcast it to all the processes
           if (my_id==0) then
@@ -141,7 +139,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !! loop over all the sites within the partition
-          
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
  !          do ki=0,split_sites-1,1
           !  do ki=0,n_sites-1,1
@@ -173,11 +170,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
-                !print*,'non-zero',loc_ids(ki) ,ki,loc_proc,loc_hamiltonian(loc_ids(ki),loc_ids(ki))
                 m(loc_ids(ki)) = loc_m(loc_ids(ki))
                 theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
                 phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
                 hamiltonian(loc_ids(ki),loc_ids(ki)) = loc_hamiltonian(loc_ids(ki),loc_ids(ki))
+                hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites)
+                hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites)
+                hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)) = loc_hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki))
 
               endif
               enddo
@@ -185,11 +184,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
           end if 
           !! hold processes here
           if (my_id > 0) then
-              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,15,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,15,MPI_COMM_WORLD,ierr)
             end if         
         
         !! synchronize all the processes       
@@ -204,7 +203,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
         !! broadcast the updated hamiltonian vlaues from root
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-        call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,MPI_COMM_WORLD,ierr)
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
         end do
@@ -268,6 +267,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
                 theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
                 phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
                 hamiltonian(loc_ids(ki),loc_ids(ki)) = loc_hamiltonian(loc_ids(ki),loc_ids(ki))
+                hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites)
+                hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites)
+                hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)) = loc_hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki))
               endif
               enddo
             end do
@@ -275,11 +277,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
           
           !!! send the information about the site that is changed and the observables that are changed to the master
           if (my_id > 0) then
-              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,status,ierr)
-              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,68,MPI_COMM_WORLD,status,ierr)
+              CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,ierr)
+              CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,68,MPI_COMM_WORLD,ierr)
             end if         
           
           !!! synchronize all the processes 
@@ -297,7 +299,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
   
           !!! send the updated hamiltonian
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+          call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,MPI_COMM_WORLD,ierr)
 
         !!! loop end for all the splits
         end do
@@ -858,7 +860,7 @@ end subroutine enr_calc
    write(str_3,format_U)u_int
    write(str_4,format_cls)cls_sites
 
-   fname=trim('parconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+   fname=trim('parmcconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
                      //trim(str_3)//trim('_cluster')//trim(str_4)
 !   print*,fname
 
