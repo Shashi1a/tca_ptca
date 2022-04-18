@@ -9,7 +9,7 @@ include "mpif.h"
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 8 !! system size
+  integer(8),parameter :: L = 12 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  6 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
@@ -81,12 +81,32 @@ integer, dimension(MPI_STATUS_SIZE)::status
     call neighbour_table(right,left,up,down,L,n_sites,sites)
 
     !! subroutined to initialize the mc variables(m,theta,phi) at each site
+    if (my_id == 0) then
     call mcvar_init(n_sites,m,theta,phi,pi,m_min,m_max)
+    end if
+    
+    !! synchronize all the processes and broadcast m configuration
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
-    !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L)
+    !! synchronize all the processes and broadcast theta configuration
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+
+    !! synchronize all the processes and broadcast theta configuration
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+
+
+    !! subroutine to initialize the full lattice hamiltonian (2L*L,2*L*L) by master
+    if (my_id==0) then
     call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h)
-    
+    end if
+
+    !! synchronize all the processes and broadcast the initial hamiltonian
+    call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+    call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
     !! subroutine to initialize the arrays with sites splits in 4 subgroup 
     call cluster_sites(cls_sites,L,n_sites,cl_st,cls_dim)
@@ -106,7 +126,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     do i = 0, n_equil, 1
 !        print *,'Equlibration loop with temp',tvar
        !! loop over all the splits  
-        do j=0,n_splits-1,1
+        do j=0,1,1
 
           !! intializing changed vars to -1 and broadcast it to all the processes
           if (my_id==0) then
@@ -121,12 +141,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !! loop over all the sites within the partition
+          
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
  !          do ki=0,split_sites-1,1
           !  do ki=0,n_sites-1,1
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
-
+            !print *,site_clster,changed_ids(ki),my_id,ki,j
             !!  initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
                           hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
@@ -136,9 +157,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
           end do
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+              
+
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
-
+            !print *,changed_ids
             !! loop over all the process and recieve the data into the root processes
             do loc_proc=1,num_procs-1,1
               call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
@@ -146,10 +169,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
               call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,15,MPI_COMM_WORLD,status,ierr)
-
+              !print *,loc_ids,loc_proc
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
+                !print*,'non-zero',loc_ids(ki) ,ki,loc_proc,loc_hamiltonian(loc_ids(ki),loc_ids(ki))
                 m(loc_ids(ki)) = loc_m(loc_ids(ki))
                 theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
                 phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
