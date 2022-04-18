@@ -4,26 +4,25 @@ include "mpif.h"
 
 !!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
 
-!  implicit none
   integer(8) :: i,j,ki
   integer :: my_id
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 12 !! system size
+  integer(8),parameter :: L = 8 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  6 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 1 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 1 !! no of measurements
-  integer(8),parameter :: meas_skip = 100 ! make measurement after this mc cycles
+  integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 1000 !! no of measurements
+  integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 2*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
+  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
@@ -35,7 +34,7 @@ include "mpif.h"
 
   !!! this array will be initialized to -1 at the starting 
   !!! entry will be changed to 1 when that particular site is updated during mc
-  integer(8),dimension(0:split_sites-1)::changed_ids
+  integer(8),dimension(0:split_sites-1)::changed_ids,loc_ids
 
   !!!!!!!!!!!!!!!!!! initialize neighbour table !!!!!!!!!!!!!!!!!!!!!
   integer(8),dimension(0:n_sites-1)::sites
@@ -105,7 +104,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     print *,tvar,"started"
     !!! Equlibration cycle
     do i = 0, n_equil, 1
-       ! print *,'Equlibration loop with temp',tvar
+!        print *,'Equlibration loop with temp',tvar
        !! loop over all the splits  
         do j=0,n_splits-1,1
 
@@ -115,11 +114,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
                 changed_ids(loc_proc) = -1
               enddo
           end if
-        
+          
+          !! all process should wait here till root send the data
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          print *,my_id
           
           !! loop over all the sites within the partition
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
@@ -127,62 +126,60 @@ integer, dimension(MPI_STATUS_SIZE)::status
           !  do ki=0,n_sites-1,1
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
-            
-            !print *,my_id,j,site_clster!,rnum
-            !site_clster = ki
-            !!    initialize cluster hamiltonian
+
+            !!  initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
                           hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
 
-            !!     try to update the mc variables at the given site
+            !!  try to update the mc variables at the given site
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
           end do
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          !print *, changed_ids  
-          !do loc_proc=0,split_sites-1,1
-           ! if (changed_ids(loc_proc)>=0) then
-              !print *,changed_ids(loc_proc),my_id,j
-           ! endif
-          !call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          !enddo
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
-            !do ki=0,split_sites-1,1
-            !  if (changed_ids(ki)>=0) then
-            !    print *,changed_ids(ki),ki,my_id
-            !  endif
-            !  enddo
+
+            !! loop over all the process and recieve the data into the root processes
             do loc_proc=1,num_procs-1,1
-              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,12,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,15,MPI_COMM_WORLD,status,ierr)
-              
+
+              !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
-              if (changed_ids(ki)>=0) then
-                print *,changed_ids(ki),ki,loc_proc
-                m(changed_ids(ki)) = loc_m(changed_ids(ki))
-                theta(changed_ids(ki)) = loc_theta(changed_ids(ki))
-                phi(changed_ids(ki)) = loc_phi(changed_ids(ki))
-                hamiltonian(changed_ids(ki),changed_ids(ki)) = loc_hamiltonian(changed_ids(ki),changed_ids(ki))
+              if (loc_ids(ki)>=0) then
+                m(loc_ids(ki)) = loc_m(loc_ids(ki))
+                theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
+                phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
+                hamiltonian(loc_ids(ki),loc_ids(ki)) = loc_hamiltonian(loc_ids(ki),loc_ids(ki))
 
               endif
               enddo
             end do
           end if 
+          !! hold processes here
           if (my_id > 0) then
               CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,11,MPI_COMM_WORLD,status,ierr)
               CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,12,MPI_COMM_WORLD,status,ierr)
               CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,13,MPI_COMM_WORLD,status,ierr)
               CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,status,ierr)
               CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,15,MPI_COMM_WORLD,status,ierr)
-            end if            
+            end if         
+        
+        !! synchronize all the processes       
+        !! broadcast the updated m vlaues from root
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        !! broadcast the updated theta vlaues from root
+        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        !! broadcast the updated phi vlaues from root
+        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        !! broadcast the updated hamiltonian vlaues from root
+        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -205,7 +202,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
               enddo
           end if
           
-
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -235,7 +231,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
           if (my_id==0) then
             !!! loop over all the processors and recieve the data from each one of them
             do loc_proc=1,num_procs-1,1
-              call MPI_RECV(changed_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,28,MPI_COMM_WORLD,status,ierr)
+              call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,28,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_m,n_sites,MPI_DOUBLE_PRECISION,loc_proc,38,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,48,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,58,MPI_COMM_WORLD,status,ierr)
@@ -243,13 +239,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
               
               !!! set the variables arrays in master using values from other slave processes
               do ki=0,split_sites-1,1
-              if (changed_ids(ki)>=0) then
-                print *,changed_ids(ki),ki,loc_proc
-                m(changed_ids(ki)) = loc_m(changed_ids(ki))
-                theta(changed_ids(ki)) = loc_theta(changed_ids(ki))
-                phi(changed_ids(ki)) = loc_phi(changed_ids(ki))
-                hamiltonian(changed_ids(ki),changed_ids(ki)) = loc_hamiltonian(changed_ids(ki),changed_ids(ki))
-
+              if (loc_ids(ki)>=0) then
+                m(loc_ids(ki)) = loc_m(loc_ids(ki))
+                theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
+                phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
+                hamiltonian(loc_ids(ki),loc_ids(ki)) = loc_hamiltonian(loc_ids(ki),loc_ids(ki))
               endif
               enddo
             end do
@@ -258,40 +252,29 @@ integer, dimension(MPI_STATUS_SIZE)::status
           !!! send the information about the site that is changed and the observables that are changed to the master
           if (my_id > 0) then
               CALL MPI_SEND(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,28,MPI_COMM_WORLD,status,ierr)
-
-              
               CALL MPI_SEND(m,n_sites,MPI_DOUBLE_PRECISION,0,38,MPI_COMM_WORLD,status,ierr)
-
-
               CALL MPI_SEND(theta,n_sites,MPI_DOUBLE_PRECISION,0,48,MPI_COMM_WORLD,status,ierr)
-
-
               CALL MPI_SEND(phi,n_sites,MPI_DOUBLE_PRECISION,0,58,MPI_COMM_WORLD,status,ierr)
-
               CALL MPI_SEND(hamiltonian,dim_h*dim_h,MPI_COMPLEX,0,68,MPI_COMM_WORLD,status,ierr)
             end if         
           
           !!! synchronize all the processes 
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
           !!! send the updated m configurations
-          call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           
           !!! send the updated theta configurations
-          call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           
           !!! send the updated phi configurations
-          call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-          
+          call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+  
           !!! send the updated hamiltonian
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(hamiltonian,dim_h*dim_h,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
 
-          
-          !!! synchronize all the processes 
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         !!! loop end for all the splits
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
@@ -301,7 +284,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
         if ( mod(i,meas_skip)==0 ) then
           
           call print_f(fname,u_int,tvar,L,cls_sites)
-          !print *,i,tvar,fname
+          print *,i,tvar,fname
 
           open(16,file=fname,action='write',position='append')
           do j=0,n_sites-1,1
@@ -851,7 +834,7 @@ end subroutine enr_calc
    write(str_3,format_U)u_int
    write(str_4,format_cls)cls_sites
 
-   fname=trim('configurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
+   fname=trim('parconfigurations_L')//trim(str_1)//trim('_temp')//trim(str_2)//trim('_Uint')&
                      //trim(str_3)//trim('_cluster')//trim(str_4)
 !   print*,fname
 
