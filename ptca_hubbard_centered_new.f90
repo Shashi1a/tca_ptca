@@ -4,25 +4,26 @@ include "mpif.h"
 
 !!!!!!!!!!!! defining parameters for the problems!!!!!!!!!!!!!!!!
 
+
   integer(8) :: i,j,ki
   integer :: my_id
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 12 !! system size
+  integer(8),parameter :: L = 4 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-  integer(8),parameter :: cls_sites =  6 !! cluster size
+  integer(8),parameter :: cls_sites =  2 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 2000 !! no of measurements
+  integer(8),parameter :: n_equil  = 1 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 1 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 2*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
+  real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
@@ -119,7 +120,7 @@ integer, dimension(MPI_STATUS_SIZE)::status
     !!! temperature loop over all the temperatures
     do while (tvar > t_min)
 
-    print *,tvar,"started"
+    !print *,tvar,"started"
     !!! Equlibration cycle
     do i = 0, n_equil, 1
 !        print *,'Equlibration loop with temp',tvar
@@ -142,9 +143,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
           do ki=my_id,split_sites-1,num_procs !uncomment this one to parallelize
  !          do ki=0,split_sites-1,1
           !  do ki=0,n_sites-1,1
+            
             site_clster = sites_array(j,ki)
             changed_ids(ki) = site_clster
-            !print *,site_clster,changed_ids(ki),my_id,ki,j
+            
+            print *,site_clster,ki,j
             !!  initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
                           hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
@@ -154,11 +157,11 @@ integer, dimension(MPI_STATUS_SIZE)::status
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
           end do
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
               
 
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
-            !print *,changed_ids
             !! loop over all the process and recieve the data into the root processes
             do loc_proc=1,num_procs-1,1
               call MPI_RECV(loc_ids,split_sites,MPI_DOUBLE_PRECISION,loc_proc,11,MPI_COMM_WORLD,status,ierr)
@@ -166,13 +169,14 @@ integer, dimension(MPI_STATUS_SIZE)::status
               call MPI_RECV(loc_theta,n_sites,MPI_DOUBLE_PRECISION,loc_proc,13,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_phi,n_sites,MPI_DOUBLE_PRECISION,loc_proc,14,MPI_COMM_WORLD,status,ierr)
               call MPI_RECV(loc_hamiltonian,dim_h*dim_h,MPI_COMPLEX,loc_proc,15,MPI_COMM_WORLD,status,ierr)
-              !print *,loc_ids,loc_proc
+
               !! loop over the loc_ids array and get the site index that is updated
               do ki=0,split_sites-1,1
               if (loc_ids(ki)>=0) then
                 m(loc_ids(ki)) = loc_m(loc_ids(ki))
                 theta(loc_ids(ki)) = loc_theta(loc_ids(ki))
                 phi(loc_ids(ki)) = loc_phi(loc_ids(ki))
+
                 hamiltonian(loc_ids(ki),loc_ids(ki)) = loc_hamiltonian(loc_ids(ki),loc_ids(ki))
                 hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki)+n_sites,loc_ids(ki)+n_sites)
                 hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites) = loc_hamiltonian(loc_ids(ki),loc_ids(ki)+n_sites)
