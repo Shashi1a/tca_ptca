@@ -12,14 +12,14 @@ program ptca_repulsive
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 8 !! system size
+  integer(8),parameter :: L = 4 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-  integer(8),parameter :: cls_sites =  6 !! cluster size
+  integer(8),parameter :: cls_sites =  2 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 1 !! no of equilibrium steps
+  integer(8),parameter :: n_equil  = 0 !! no of equilibrium steps
   integer(8),parameter :: n_meas  = 1 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
@@ -123,7 +123,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
 
     !!! Equlibration cycle
     do i = 0, n_equil, 1
-       !! loop over all the splits  
+       print *,i
+       !! loop over all the splits 
+       print *,m,my_id 
         do j=0,n_splits-1,1
           !! intializing changed vars to -1 and broadcast it to all the processes
           if (my_id==0) then
@@ -152,10 +154,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                  cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
             call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          !print *,'bb',m(site_clster),my_id,site_clster
           end do
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-              
+!          print *,'bb',m(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
+          
+          
           !!! transfer the new m,theta,phi,hamiltonian between all the processors
           if (my_id==0) then
             !! loop over all the process and recieve the data into the root processes
@@ -185,16 +190,19 @@ integer, dimension(MPI_STATUS_SIZE)::status
               call MPI_SEND(loc_phi,n_sites,MPI_DOUBLE_PRECISION,0,14,MPI_COMM_WORLD,ierr)
           end if
         !! synchronize all the processes       
-        !! broadcast the updated m vlaues from root
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+       ! print *,'bb',m(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
 
-        call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+        !! broadcast the updated m vlaues from root
         call MPI_BCAST(m,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        print *,'ab',m,my_id
         
-        !! broadcast the updated theta vlaues from root
+        
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+        !! broadcast the updated theta vlaues from root
         call MPI_BCAST(theta,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
+        
         !! broadcast the updated phi vlaues from root
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
         call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
@@ -206,6 +214,13 @@ integer, dimension(MPI_STATUS_SIZE)::status
         !! monte carlo configurations of m,theta and phi
         call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
                             mu,u_int,m,theta,phi,dim_h)
+        
+        !do loc_proc=0,10,1
+        !print *,'ab',m(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
+        !print *,'ab',theta(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
+        !print *, phi(j*(split_sites-1):(j+1)*(split_sites-1)),my_id
+        !end do
+
         end do
         call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
@@ -237,13 +252,10 @@ integer, dimension(MPI_STATUS_SIZE)::status
             !!    initialize cluster hamiltonian
             call cluster_ham(site_clster,L,n_sites,cls_sites, &
                                 hamil_cls,cls_dim,t_hopping,hamiltonian,dim_h,dim_clsh,cl_st)
-            call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
             !!     try to update the mc variables at the given site
             call  mc_sweep(cls_sites,hamil_cls,dim_h,dim_clsh,n_sites,m,theta,phi,site_clster,&
                     cls_dim,hamiltonian,mu,u_int,pi,work,lwork,rwork,lrwork,iwork,liwork,info,tvar,cl_st,m_min,m_max)
-            call MPI_BARRIER(MPI_COMM_WORLD,ierr)
-
             !! loop over the sites in each non-interacting split of the lattice
             end do
         
@@ -296,6 +308,8 @@ integer, dimension(MPI_STATUS_SIZE)::status
   
           
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
+
           !! initializing the most updated hamiltonian using the updated
           !! monte carlo configurations of m,theta and phi
           call ham_init(right,left,up,down,L,n_sites,hamiltonian,t_hopping,&
