@@ -12,7 +12,7 @@ program ptca_repulsive
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 12 !! system size
+  integer(8),parameter :: L = 16 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
   integer(8),parameter :: cls_sites =  6 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
@@ -136,7 +136,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
           !! all process should wait here till root send the data
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BCAST(changed_ids,split_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           
           !! loop over all the sites within the partition
@@ -306,7 +305,6 @@ integer, dimension(MPI_STATUS_SIZE)::status
           call MPI_BCAST(phi,n_sites,MPI_DOUBLE_PRECISION,0,MPI_COMM_WORLD,ierr)
   
           
-          call MPI_BARRIER(MPI_COMM_WORLD,ierr)
           call MPI_BARRIER(MPI_COMM_WORLD,ierr)
 
           !! initializing the most updated hamiltonian using the updated
