@@ -12,20 +12,20 @@ program ptca_repulsive
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 8 !! system size
+  integer(8),parameter :: L = 12 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-  integer(8),parameter :: cls_sites =  6 !! cluster size
+  integer(8),parameter :: cls_sites =  4 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
   integer(8),parameter :: cls_dim = (cls_sites)*(cls_sites) !! number of sites in the cluster
-  integer(8),parameter :: n_equil  = 1000 !! no of equilibrium steps
-  integer(8),parameter :: n_meas  = 1000 !! no of measurements
+  integer(8),parameter :: n_equil  = 2000 !! no of equilibrium steps
+  integer(8),parameter :: n_meas  = 2000 !! no of measurements
   integer(8),parameter :: meas_skip = 10 ! make measurement after this mc cycles
   integer(8),parameter :: dim_h = 2*n_sites  ! dimensionality of hamiltonian
   integer(8),parameter :: dim_clsh = 2*cls_dim ! dimensionality of cluster hamiltonian
   real(8),parameter :: temp = 0.30  !! simulation temperature
-  real(8),parameter :: dtemp = 0.30 !! temperature step to lower the temperature
+  real(8),parameter :: dtemp = 0.01 !! temperature step to lower the temperature
   real(8),parameter :: t_min = 0.01 !! minimum temperature for the simulation
   real(8),parameter :: pi = 4*atan(1.0)
   real(8),parameter :: t_hopping = 1.0
