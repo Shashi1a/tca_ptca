@@ -12,9 +12,9 @@ program ptca_repulsive
   integer :: num_procs
   integer(8) :: site_clster,loc_proc
   real(8) :: tvar,rnum !! variable used to store intermediate temperature
-  integer(8),parameter :: L = 12 !! system size
+  integer(8),parameter :: L = 10 !! system size
   integer(8),parameter :: n_sites = L * L !! number of sites in the lattice
-  integer(8),parameter :: cls_sites =  4 !! cluster size
+  integer(8),parameter :: cls_sites =  8 !! cluster size
   integer(8),parameter :: ncl_by2 = 0.5*(cls_sites)+1 !! dividing cls_sites by 2
   integer(8),parameter :: n_splits = (ncl_by2)*(ncl_by2)
   integer(8),parameter :: split_sites = n_sites/n_splits
@@ -230,9 +230,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
       !! time when the equilibration cycle finishes
       call cpu_time(t_end_equil)
       delT  = t_end_equil-t_strt_equil
-      open(21,file='total_equilibration_time',action='write',position='append')
+      open(21,file='total_equilibration_time_L10_cl8',action='write',position='append')
       if (my_id==0) then
-          write(21,*) my_id, delT 
+          write(21,*) my_id, tvar,delT 
           do i=1,num_procs-1,1
               call MPI_RECV(delT,1,MPI_DOUBLE_PRECISION,i,69,MPI_COMM_WORLD,status,ierr)
               write(21,*) i, tvar,delT 
@@ -356,9 +356,9 @@ integer, dimension(MPI_STATUS_SIZE)::status
       call cpu_time(t_end_meas)
       delT = t_end_meas-t_strt_meas 
       print *,'measurement time elapsed', delT,my_id
-      open(22,file='total_measurement_time',action='write',position='append')
+      open(22,file='total_measurement_time_L10_cl8',action='write',position='append')
       if (my_id==0) then
-          write(22,*) my_id, delT 
+          write(22,*) my_id, tvar, delT 
           do i=1,num_procs-1,1
               call MPI_RECV(delT,1,MPI_DOUBLE_PRECISION,i,69,MPI_COMM_WORLD,status,ierr)
               write(22,*) i, tvar,delT 
